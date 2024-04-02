@@ -2,15 +2,36 @@ import FeedWrapper from "@/components/feed-wrapper";
 import StickyWrapper from "@/components/sticky-wrapper";
 import Header from "./header";
 import UserProgress from "@/components/user-progress";
-import { getUserProgress } from "@/db/queries";
+import {
+  getCourseProgress,
+  getUnits,
+  getUserProgress,
+  getLessonPercentage,
+} from "@/db/queries";
 import { redirect } from "next/navigation";
+import { Key } from "lucide-react";
+import { unitRelation } from "@/db/schema";
+import Unit from "./unit";
 //sticky wrapper sẽ dính lại bên phải và không bị trôi đi khi scroll down feed wrapper sẽ là content của trang
 const LearnPage = async () => {
   const userProgressData = getUserProgress();
+  const unitsData = getUnits();
+  const courseProgressData = getCourseProgress();
+  const lessonsPersentageData = getLessonPercentage();
+  const [userProgress, units, courseProgress, lessonPercentage] =
+    await Promise.all([
+      userProgressData,
+      unitsData,
+      courseProgressData,
+      lessonsPersentageData,
+    ]);
 
-  const [userProgress] = await Promise.all([userProgressData]);
   //nếu tiến trình học người dùng không có thì chuyển về /courses
   if (!userProgress || !userProgress.activeCourse) {
+    redirect("/courses");
+  }
+
+  if (!courseProgress) {
     redirect("/courses");
   }
   return (
@@ -23,8 +44,23 @@ const LearnPage = async () => {
           hasActiveSubscription={false}
         />
       </StickyWrapper>
+
       <FeedWrapper>
         <Header title={userProgress.activeCourse.title} />
+
+        {units.map((unit) => (
+          <div key={unit.id} className="mb-10">
+            <Unit
+              id={unit.id}
+              order={unit.order}
+              description={unit.description}
+              title={unit.title}
+              lessons={unit.lessons}
+              activeLessons={courseProgress.activeLesson}
+              activeLessonPercentage={lessonPercentage}
+            />
+          </div>
+        ))}
       </FeedWrapper>
     </div>
   );
