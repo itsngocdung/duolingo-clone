@@ -1,12 +1,17 @@
 import { getLesson, getUserProgress, getUserSubscription } from "@/db/queries";
 import { redirect } from "next/navigation";
-import Quiz from "./quiz";
+import Quiz from "../quiz";
 
-const LessonPage = async () => {
+type Props = {
+  params: {
+    lessonId: number;
+  };
+};
+
+const LessonIdPage = async ({ params }: Props) => {
   // lấy ra các dữ liệu về bài học (lesson) và quá trình ngươi dùng học tới đâu
-  const lessonData = getLesson();
+  const lessonData = getLesson(params.lessonId);
   const userProgressData = getUserProgress();
-
   const userSubscriptionData = getUserSubscription();
   // khoai báo biến lesson, userprogress để dễ gọi
   const [lesson, userProgress, userSubscription] = await Promise.all([
@@ -36,4 +41,4 @@ const LessonPage = async () => {
   );
 };
 
-export default LessonPage;
+export default LessonIdPage;

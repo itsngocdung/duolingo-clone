@@ -34,6 +34,7 @@ const Challenge = ({
           id={option.id}
           text={option.text}
           imageSrc={option.imageSrc}
+          // shortcut là số trên bàn phím lấy theo index hiện tại +1
           shortcut={`${i + 1}`}
           selected={selectedOption === option.id}
           onClick={() => onSelect(option.id)}

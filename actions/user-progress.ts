@@ -1,10 +1,16 @@
 "use server";
 
+import { points_to_refill } from "@/constant";
 import db from "@/db/drizzle";
-import { getCourseById, getUserProgress } from "@/db/queries";
-import { userProgress } from "@/db/schema";
+import {
+  getCourseById,
+  getUserProgress,
+  getUserSubscription,
+} from "@/db/queries";
+import { challengeProgress, challenges, userProgress } from "@/db/schema";
 import { auth, currentUser } from "@clerk/nextjs";
 import { error } from "console";
+import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -25,9 +31,9 @@ export const upsertUserProgress = async (courseId: number) => {
   }
 
   // nếu course không có bài giảng nào thông báo course rỗng
-  // if(!course.units.length || !course.units[0].lesson.length){
-  //     throw new Error ("Course empty")
-  // }
+  if (!course.units.length || !course.units[0].lessons.length) {
+    throw new Error("Course empty");
+  }
 
   const existingUserProgress = await getUserProgress();
 
@@ -54,4 +60,84 @@ export const upsertUserProgress = async (courseId: number) => {
   revalidatePath("/courses");
   revalidatePath("/learn");
   redirect("/learn");
+};
+
+export const reduceHearts = async (challengeId: number) => {
+  const { userId } = await auth();
+
+  if (!userId) {
+    throw new Error("Unauthorized user");
+  }
+
+  const currentUserProgress = await getUserProgress();
+  const userSubscription = await getUserSubscription();
+  const challenge = await db.query.challenges.findFirst({
+    where: eq(challenges.id, challengeId),
+  });
+  if (!challenge) {
+    throw new Error("Challenge not found");
+  }
+  const lessonId = challenge.lessonsId;
+  const existingChallengeProgress = await db.query.challengeProgress.findFirst({
+    where: and(
+      eq(challengeProgress.userId, userId),
+      eq(challengeProgress.challengeId, challengeId)
+    ),
+  });
+  const isPractice = !!existingChallengeProgress;
+  if (isPractice) {
+    //return theo api
+    return { error: "practice" };
+  }
+  if (!currentUserProgress) {
+    //return theo thong bao (break the app)
+    throw new Error("User progress not found");
+  }
+  //mỗi khi error sẽ dừng hoạt động và không tiến hành update database nữa
+  if (userSubscription?.isActive) {
+    return { error: "subscription" };
+  }
+
+  if (currentUserProgress.hearts === 0) {
+    return { error: "hearts" };
+  }
+
+  await db
+    .update(userProgress)
+    .set({
+      hearts: Math.max(currentUserProgress.hearts - 1, 0),
+    })
+    .where(eq(userProgress.userId, userId));
+
+  revalidatePath("/shop");
+  revalidatePath("/learn");
+  revalidatePath("/quests");
+  revalidatePath("/leaderboard");
+  revalidatePath(`/lesson/${lessonId}`);
+};
+
+export const refillHearts = async () => {
+  const currentUserProgress = await getUserProgress();
+
+  if (!currentUserProgress) {
+    throw new Error("User progress not found");
+  }
+  if (currentUserProgress.hearts === 5) {
+    throw new Error("Hearts are already full");
+  }
+  if (currentUserProgress.points < points_to_refill) {
+    throw new Error("Not enough points");
+  }
+  await db
+    .update(userProgress)
+    .set({
+      hearts: 5,
+      points: currentUserProgress.points - points_to_refill,
+    })
+    .where(eq(userProgress.userId, currentUserProgress.userId));
+
+  revalidatePath("/shop");
+  revalidatePath("/learn");
+  revalidatePath("/quests");
+  revalidatePath("/leaderboard");
 };
